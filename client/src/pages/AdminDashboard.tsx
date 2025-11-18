@@ -273,18 +273,38 @@ export default function AdminDashboard() {
   };
 
   const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
-    if (result.successful && result.successful.length > 0) {
-      const uploadURL = result.successful[0].uploadURL;
-      if (uploadURL) {
+    try {
+      if (result.successful && result.successful.length > 0) {
+        const file = result.successful[0];
+        const uploadURL = file.response?.uploadURL;
+        
+        if (!uploadURL) {
+          console.error("No uploadURL in result:", file);
+          toast({
+            title: "Upload error",
+            description: "Could not get upload URL from result",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const response = await apiRequest("PUT", "/api/product-images", {
           productImageURL: uploadURL,
         });
+        
         setUploadedImageUrl(response.objectPath);
         form.setValue("imageUrl", response.objectPath);
         toast({
           title: "Image uploaded successfully",
         });
       }
+    } catch (error: any) {
+      console.error("Upload completion error:", error);
+      toast({
+        title: "Upload error",
+        description: error.message || "Failed to complete upload",
+        variant: "destructive",
+      });
     }
   };
 
