@@ -53,12 +53,14 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: products, isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
-    queryKey: ["/api/products"],
+  const { error: adminCheckError } = useQuery({
+    queryKey: ["/api/orders"],
+    enabled: isAuthenticated,
+    retry: false,
   });
 
   useEffect(() => {
-    if (productsError && isForbiddenError(productsError as Error)) {
+    if (adminCheckError && isForbiddenError(adminCheckError as Error)) {
       toast({
         title: "Access Denied",
         description: "You do not have admin privileges. Please contact the store owner.",
@@ -67,8 +69,21 @@ export default function AdminDashboard() {
       setTimeout(() => {
         setLocation("/");
       }, 2000);
+    } else if (adminCheckError && isUnauthorizedError(adminCheckError as Error)) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
     }
-  }, [productsError, setLocation, toast]);
+  }, [adminCheckError, setLocation, toast]);
+
+  const { data: products, isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+  });
 
   const form = useForm<InsertProduct>({
     resolver: zodResolver(insertProductSchema),
