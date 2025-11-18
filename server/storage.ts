@@ -39,6 +39,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
+    if (!userData.email) {
+      throw new Error("Email is required for user upsert");
+    }
+
     // Check for existing user by email first (since email has unique constraint)
     const [existingByEmail] = await db
       .select()
