@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { insertProductSchema, insertOrderSchema, ORDER_STATUSES, PAYMENT_STATUSES } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
@@ -64,15 +64,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Object upload URL (protected)
-  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
+  // Object upload URL (admin only)
+  app.post("/api/objects/upload", isAdmin, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     res.json({ uploadURL });
   });
 
-  // Product image ACL setting (protected)
-  app.put("/api/product-images", isAuthenticated, async (req, res) => {
+  // Product image ACL setting (admin only)
+  app.put("/api/product-images", isAdmin, async (req, res) => {
     if (!req.body.productImageURL) {
       return res.status(400).json({ error: "productImageURL is required" });
     }
@@ -122,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", isAuthenticated, async (req, res) => {
+  app.post("/api/products", isAdmin, async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const product = await storage.createProduct(productData);
@@ -133,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/products/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/products/:id", isAdmin, async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const product = await storage.updateProduct(req.params.id, productData);
@@ -144,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/products/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/products/:id", isAdmin, async (req, res) => {
     try {
       await storage.deleteProduct(req.params.id);
       res.status(204).send();
@@ -264,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/orders", isAuthenticated, async (req, res) => {
+  app.get("/api/orders", isAdmin, async (req, res) => {
     try {
       const orders = await storage.getAllOrders();
       res.json(orders);
@@ -279,7 +279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     paymentStatus: z.enum(PAYMENT_STATUSES),
   });
 
-  app.patch("/api/orders/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/orders/:id", isAdmin, async (req, res) => {
     try {
       const { status, paymentStatus } = updateOrderStatusSchema.parse(req.body);
       const order = await storage.updateOrderStatus(req.params.id, status, paymentStatus);
