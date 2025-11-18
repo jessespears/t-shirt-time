@@ -33,11 +33,16 @@ export function ObjectUploader({
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
   const onCompleteRef = useRef(onComplete);
+  const onGetUploadParametersRef = useRef(onGetUploadParameters);
   
-  // Keep the ref updated with the latest callback
+  // Keep the refs updated with the latest callbacks
   useEffect(() => {
     onCompleteRef.current = onComplete;
   }, [onComplete]);
+  
+  useEffect(() => {
+    onGetUploadParametersRef.current = onGetUploadParameters;
+  }, [onGetUploadParameters]);
   
   const [uppy] = useState(() =>
     new Uppy({
@@ -49,7 +54,10 @@ export function ObjectUploader({
     })
       .use(AwsS3, {
         shouldUseMultipart: false,
-        getUploadParameters: onGetUploadParameters,
+        getUploadParameters: async (file) => {
+          // Use the ref to always get the latest function
+          return onGetUploadParametersRef.current();
+        },
       })
       .on("complete", (result) => {
         // Use the ref to always get the latest callback
