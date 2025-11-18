@@ -199,11 +199,33 @@ export default function Checkout() {
       return response;
     },
     onSuccess: (data: any) => {
+      if (!data.clientSecret || !data.subtotal || !data.tax || !data.total) {
+        toast({
+          title: "Payment setup failed",
+          description: "Received invalid payment data from server",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const parsedSubtotal = parseFloat(data.subtotal);
+      const parsedTax = parseFloat(data.tax);
+      const parsedTotal = parseFloat(data.total);
+
+      if (!isFinite(parsedSubtotal) || !isFinite(parsedTax) || !isFinite(parsedTotal)) {
+        toast({
+          title: "Payment setup failed",
+          description: "Received invalid payment amounts from server",
+          variant: "destructive",
+        });
+        return;
+      }
+
       setClientSecret(data.clientSecret);
       setServerTotals({
-        subtotal: parseFloat(data.subtotal),
-        tax: parseFloat(data.tax),
-        total: parseFloat(data.total),
+        subtotal: parsedSubtotal,
+        tax: parsedTax,
+        total: parsedTotal,
       });
       setStep("payment");
     },
@@ -221,7 +243,7 @@ export default function Checkout() {
     createPaymentIntentMutation.mutate();
   };
 
-  if (step === "payment" && clientSecret && shippingInfo) {
+  if (step === "payment" && clientSecret && shippingInfo && serverTotals) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
