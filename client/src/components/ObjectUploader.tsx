@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
 import Dashboard from "@uppy/react/dashboard";
@@ -32,6 +32,13 @@ export function ObjectUploader({
   children,
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+  
+  // Keep the ref updated with the latest callback
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+  
   const [uppy] = useState(() =>
     new Uppy({
       restrictions: {
@@ -45,7 +52,8 @@ export function ObjectUploader({
         getUploadParameters: onGetUploadParameters,
       })
       .on("complete", (result) => {
-        onComplete?.(result);
+        // Use the ref to always get the latest callback
+        onCompleteRef.current?.(result);
         setShowModal(false);
       })
   );
