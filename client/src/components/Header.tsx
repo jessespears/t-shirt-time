@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { ShoppingCart, User } from "lucide-react";
+import { ShoppingCart, User, Package, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,6 +37,23 @@ export function Header() {
         </Link>
 
         <div className="flex items-center gap-2">
+          {isAdminRoute && isAuthenticated && (
+            <>
+              <Link href="/admin/dashboard" data-testid="link-products">
+                <Button variant={location === "/admin/dashboard" ? "default" : "ghost"} size="sm">
+                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  Products
+                </Button>
+              </Link>
+              <Link href="/admin/orders" data-testid="link-orders">
+                <Button variant={location === "/admin/orders" ? "default" : "ghost"} size="sm">
+                  <Package className="h-4 w-4 mr-2" />
+                  Orders
+                </Button>
+              </Link>
+            </>
+          )}
+          
           {!isAdminRoute && (
             <Link href="/cart" data-testid="link-cart">
               <Button variant="ghost" size="icon" className="relative">

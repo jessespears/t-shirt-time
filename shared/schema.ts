@@ -12,6 +12,12 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const ORDER_STATUSES = ["pending", "processing", "shipped", "completed", "cancelled"] as const;
+export const PAYMENT_STATUSES = ["unpaid", "paid", "refunded"] as const;
+
+export type OrderStatus = typeof ORDER_STATUSES[number];
+export type PaymentStatus = typeof PAYMENT_STATUSES[number];
+
 // Session storage table (required for Replit Auth)
 export const sessions = pgTable(
   "sessions",
@@ -46,6 +52,8 @@ export const products = pgTable("products", {
   imageUrl: text("image_url").notNull(),
   availableSizes: text("available_sizes").array().notNull().default(sql`ARRAY['S', 'M', 'L', 'XL']::text[]`),
   availableColors: text("available_colors").array().notNull().default(sql`ARRAY['White', 'Black', 'Navy', 'Gray']::text[]`),
+  stockQuantity: integer("stock_quantity").notNull().default(0),
+  lowStockThreshold: integer("low_stock_threshold").notNull().default(10),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -74,7 +82,11 @@ export const orders = pgTable("orders", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   tax: decimal("tax", { precision: 10, scale: 2 }).notNull(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status").notNull().default("pending"),
+  paymentStatus: varchar("payment_status").notNull().default("unpaid"),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertOrderSchema = createInsertSchema(orders).omit({

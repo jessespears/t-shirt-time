@@ -10,7 +10,7 @@ import {
   type InsertOrder,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, sql as drizzleSql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -25,8 +25,10 @@ export interface IStorage {
   deleteProduct(id: string): Promise<void>;
 
   // Order operations
-  createOrder(order: InsertOrder): Promise<Order>;
+  createOrderWithStockUpdate(order: InsertOrder, items: Array<{productId: string, quantity: number}>): Promise<Order>;
   getOrderByNumber(orderNumber: string): Promise<Order | undefined>;
+  getAllOrders(): Promise<Order[]>;
+  updateOrderStatus(id: string, status: string, paymentStatus: string): Promise<Order>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -83,9 +85,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Order operations
-  async createOrder(orderData: InsertOrder): Promise<Order> {
-    const [order] = await db.insert(orders).values(orderData).returning();
-    return order;
+  async createOrderWithStockUpdate(orderData: InsertOrder, items: Array<{productId: string, quantity: number}>): Promise<Order> {
+    return await db.transaction(async (tx) => {
+      for (const item of items) {
+        const [product] = await tx
+          .select()
+          .from(products)
+          .where(eq(products.id, item.productId));
+        
+        if (!product) {
+          throw new Error(`Product not found: ${item.productId}`);
+        }
+        
+        if (product.stockQuantity < item.quantity) {
+          throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`);
+        }
+
+        await tx
+          .update(products)
+          .set({
+            stockQuantity: product.stockQuantity - item.quantity,
+            updatedAt: new Date(),
+          })
+          .where(eq(products.id, item.productId));
+      }
+      
+      const [order] = await tx.insert(orders).values(orderData).returning();
+      return order;
+    });
   }
 
   async getOrderByNumber(orderNumber: string): Promise<Order | undefined> {
@@ -93,6 +120,23 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(orders)
       .where(eq(orders.orderNumber, orderNumber));
+    return order;
+  }
+
+  async getAllOrders(): Promise<Order[]> {
+    return await db.select().from(orders);
+  }
+
+  async updateOrderStatus(id: string, status: string, paymentStatus: string): Promise<Order> {
+    const [order] = await db
+      .update(orders)
+      .set({
+        status,
+        paymentStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, id))
+      .returning();
     return order;
   }
 }

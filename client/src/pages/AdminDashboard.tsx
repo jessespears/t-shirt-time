@@ -66,6 +66,8 @@ export default function AdminDashboard() {
       imageUrl: "",
       availableSizes: ["S", "M", "L", "XL"],
       availableColors: ["White", "Black", "Navy", "Gray"],
+      stockQuantity: 0,
+      lowStockThreshold: 10,
     },
   });
 
@@ -78,6 +80,8 @@ export default function AdminDashboard() {
         imageUrl: editingProduct.imageUrl,
         availableSizes: editingProduct.availableSizes,
         availableColors: editingProduct.availableColors,
+        stockQuantity: editingProduct.stockQuantity,
+        lowStockThreshold: editingProduct.lowStockThreshold,
       });
       setUploadedImageUrl(editingProduct.imageUrl);
     } else {
@@ -88,6 +92,8 @@ export default function AdminDashboard() {
         imageUrl: "",
         availableSizes: ["S", "M", "L", "XL"],
         availableColors: ["White", "Black", "Navy", "Gray"],
+        stockQuantity: 0,
+        lowStockThreshold: 10,
       });
       setUploadedImageUrl("");
     }
@@ -314,6 +320,48 @@ export default function AdminDashboard() {
                     )}
                   />
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="stockQuantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stock Quantity</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="100"
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              data-testid="input-stock-quantity"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="lowStockThreshold"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Low Stock Alert</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="10"
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              data-testid="input-low-stock-threshold"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <div>
                     <FormLabel>Product Image</FormLabel>
                     <div className="mt-2 space-y-2">
@@ -378,6 +426,16 @@ export default function AdminDashboard() {
                   <p className="mt-1 text-lg font-bold text-primary">
                     ${parseFloat(product.price).toFixed(2)}
                   </p>
+                  <div className="mt-2 flex items-center gap-2 text-sm">
+                    <span className={product.stockQuantity <= product.lowStockThreshold ? "text-destructive font-medium" : "text-muted-foreground"}>
+                      Stock: {product.stockQuantity}
+                    </span>
+                    {product.stockQuantity <= product.lowStockThreshold && (
+                      <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
+                        Low
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-4 flex gap-2">
                     <Button
                       variant="outline"

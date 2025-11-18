@@ -2,9 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertProductSchema, insertOrderSchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, ORDER_STATUSES, PAYMENT_STATUSES } from "@shared/schema";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -149,7 +150,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       const orderData = insertOrderSchema.parse(req.body);
-      const order = await storage.createOrder(orderData);
+      
+      const items = orderData.items as Array<{productId: string, quantity: number}>;
+      
+      const order = await storage.createOrderWithStockUpdate(orderData, items);
       res.status(201).json(order);
     } catch (error: any) {
       console.error("Error creating order:", error);
@@ -167,6 +171,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching order:", error);
       res.status(500).json({ message: "Failed to fetch order" });
+    }
+  });
+
+  app.get("/api/orders", isAuthenticated, async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  const updateOrderStatusSchema = z.object({
+    status: z.enum(ORDER_STATUSES),
+    paymentStatus: z.enum(PAYMENT_STATUSES),
+  });
+
+  app.patch("/api/orders/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { status, paymentStatus } = updateOrderStatusSchema.parse(req.body);
+      const order = await storage.updateOrderStatus(req.params.id, status, paymentStatus);
+      res.json(order);
+    } catch (error: any) {
+      console.error("Error updating order:", error);
+      if (error.name === "ZodError") {
+        res.status(400).json({ message: "Invalid status values", errors: error.errors });
+      } else {
+        res.status(500).json({ message: "Failed to update order" });
+      }
     }
   });
 

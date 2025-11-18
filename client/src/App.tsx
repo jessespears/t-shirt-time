@@ -12,6 +12,7 @@ import Checkout from "@/pages/Checkout";
 import Confirmation from "@/pages/Confirmation";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
+import Orders from "@/pages/Orders";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/confirmation/:orderNumber" component={Confirmation} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/admin/orders" component={Orders} />
       <Route component={NotFound} />
     </Switch>
   );
