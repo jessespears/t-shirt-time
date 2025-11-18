@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Product, InsertProduct, insertProductSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
+import { isUnauthorizedError, isForbiddenError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
@@ -53,9 +53,22 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: products, isLoading: productsLoading } = useQuery<Product[]>({
+  const { data: products, isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
+
+  useEffect(() => {
+    if (productsError && isForbiddenError(productsError as Error)) {
+      toast({
+        title: "Access Denied",
+        description: "You do not have admin privileges. Please contact the store owner.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setLocation("/");
+      }, 2000);
+    }
+  }, [productsError, setLocation, toast]);
 
   const form = useForm<InsertProduct>({
     resolver: zodResolver(insertProductSchema),
@@ -122,6 +135,17 @@ export default function AdminDashboard() {
         }, 500);
         return;
       }
+      if (isForbiddenError(error)) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have admin privileges.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          setLocation("/");
+        }, 2000);
+        return;
+      }
       toast({
         title: "Failed to create product",
         description: error.message,
@@ -154,6 +178,17 @@ export default function AdminDashboard() {
         }, 500);
         return;
       }
+      if (isForbiddenError(error)) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have admin privileges.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          setLocation("/");
+        }, 2000);
+        return;
+      }
       toast({
         title: "Failed to update product",
         description: error.message,
@@ -180,6 +215,17 @@ export default function AdminDashboard() {
         setTimeout(() => {
           window.location.href = "/api/login";
         }, 500);
+        return;
+      }
+      if (isForbiddenError(error)) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have admin privileges.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          setLocation("/");
+        }, 2000);
         return;
       }
       toast({

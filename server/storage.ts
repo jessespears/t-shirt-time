@@ -41,11 +41,17 @@ export class DatabaseStorage implements IStorage {
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values({
+        ...userData,
+        isAdmin: userData.isAdmin ?? 0,
+      })
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          ...userData,
+          email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          profileImageUrl: userData.profileImageUrl,
           updatedAt: new Date(),
         },
       })

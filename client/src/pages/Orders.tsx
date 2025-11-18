@@ -17,10 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-function isUnauthorizedError(error: Error) {
-  return error.message.includes("401") || error.message.includes("Unauthorized");
-}
+import { isUnauthorizedError, isForbiddenError } from "@/lib/authUtils";
 
 export default function Orders() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -40,9 +37,22 @@ export default function Orders() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
+  const { data: orders, isLoading: ordersLoading, error: ordersError } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
   });
+
+  useEffect(() => {
+    if (ordersError && isForbiddenError(ordersError as Error)) {
+      toast({
+        title: "Access Denied",
+        description: "You do not have admin privileges. Please contact the store owner.",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        setLocation("/");
+      }, 2000);
+    }
+  }, [ordersError, setLocation, toast]);
 
   const updateOrderMutation = useMutation({
     mutationFn: async ({ id, status, paymentStatus }: { id: string; status: string; paymentStatus: string }) => {
@@ -62,6 +72,17 @@ export default function Orders() {
         setTimeout(() => {
           window.location.href = "/api/login";
         }, 500);
+        return;
+      }
+      if (isForbiddenError(error)) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have admin privileges.",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          setLocation("/");
+        }, 2000);
         return;
       }
       toast({

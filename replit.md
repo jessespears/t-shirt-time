@@ -62,8 +62,18 @@ Preferred communication style: Simple, everyday language.
 - Replit Auth integration using OpenID Connect (OIDC)
 - Passport.js strategy for OAuth flow
 - Session-based authentication with PostgreSQL session store (connect-pg-simple)
-- Protected admin routes requiring authentication
+- Role-based access control (RBAC) for admin features
+  - `isAdmin` middleware protects admin-only routes (product management, order management)
+  - New users default to non-admin (isAdmin = 0)
+  - Admin status persists across logins
 - Session TTL: 1 week with automatic refresh
+
+**Granting Admin Access:**
+To grant admin privileges to a user, use the Replit Database tool or execute this SQL:
+```sql
+UPDATE users SET is_admin = 1 WHERE email = 'your-email@example.com';
+```
+Note: Users must log in at least once before they can be granted admin access.
 
 **API Design:**
 - RESTful endpoints under `/api` prefix
