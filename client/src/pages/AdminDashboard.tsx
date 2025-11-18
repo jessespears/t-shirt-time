@@ -273,13 +273,21 @@ export default function AdminDashboard() {
   };
 
   const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    console.log("=== UPLOAD COMPLETE CALLBACK ===");
+    console.log("Full result:", JSON.stringify(result, null, 2));
+    
     try {
       if (result.successful && result.successful.length > 0) {
         const file = result.successful[0];
+        console.log("File object:", file);
+        console.log("File response:", file.response);
+        
         const uploadURL = file.response?.uploadURL;
+        console.log("Extracted uploadURL:", uploadURL);
         
         if (!uploadURL) {
-          console.error("No uploadURL in result:", file);
+          console.error("No uploadURL found in result");
+          console.error("Full file object:", JSON.stringify(file, null, 2));
           toast({
             title: "Upload error",
             description: "Could not get upload URL from result",
@@ -288,15 +296,19 @@ export default function AdminDashboard() {
           return;
         }
 
+        console.log("Calling /api/product-images with URL:", uploadURL);
         const response = await apiRequest("PUT", "/api/product-images", {
           productImageURL: uploadURL,
         });
         
+        console.log("Response from /api/product-images:", response);
         setUploadedImageUrl(response.objectPath);
         form.setValue("imageUrl", response.objectPath);
         toast({
           title: "Image uploaded successfully",
         });
+      } else {
+        console.warn("No successful uploads in result");
       }
     } catch (error: any) {
       console.error("Upload completion error:", error);
