@@ -6,6 +6,14 @@ import { insertProductSchema, insertOrderSchema, ORDER_STATUSES, PAYMENT_STATUSE
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { z } from "zod";
+import Stripe from "stripe";
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2024-11-20.acacia",
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -143,6 +151,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting product:", error);
       res.status(500).json({ message: "Failed to delete product" });
+    }
+  });
+
+  // Stripe payment route - server-side amount calculation for security
+  const createPaymentIntentSchema = z.object({
+    items: z.array(z.object({
+      productId: z.string(),
+      quantity: z.number().positive(),
+      size: z.string(),
+      color: z.string(),
+    })),
+  });
+
+  app.post("/api/create-payment-intent", async (req, res) => {
+    try {
+      const { items } = createPaymentIntentSchema.parse(req.body);
+      
+      let subtotal = 0;
+      for (const item of items) {
+        const product = await storage.getProduct(item.productId);
+        if (!product) {
+          return res.status(400).json({ message: `Product not found: ${item.productId}` });
+        }
+        
+        if (product.stockQuantity < item.quantity) {
+          return res.status(400).json({ 
+            message: `Insufficient stock for ${product.name}. Available: ${product.stockQuantity}` 
+          });
+        }
+        
+        subtotal += parseFloat(product.price) * item.quantity;
+      }
+      
+      const tax = subtotal * 0.085;
+      const total = subtotal + tax;
+      
+      if (total <= 0) {
+        return res.status(400).json({ message: "Invalid cart total" });
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(total * 100),
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        metadata: {
+          subtotal: subtotal.toFixed(2),
+          tax: tax.toFixed(2),
+          total: total.toFixed(2),
+        },
+      });
+      
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        subtotal: subtotal.toFixed(2),
+        tax: tax.toFixed(2),
+        total: total.toFixed(2),
+      });
+    } catch (error: any) {
+      console.error("Error creating payment intent:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid request data", errors: error.errors });
+      }
+      res
+        .status(500)
+        .json({ message: "Error creating payment intent: " + error.message });
+    }
+  });
+
+  // Verify payment and retrieve payment intent details
+  app.get("/api/verify-payment/:paymentIntentId", async (req, res) => {
+    try {
+      const paymentIntent = await stripe.paymentIntents.retrieve(req.params.paymentIntentId);
+      res.json({
+        status: paymentIntent.status,
+        amount: paymentIntent.amount / 100,
+        metadata: paymentIntent.metadata,
+      });
+    } catch (error: any) {
+      console.error("Error verifying payment:", error);
+      res.status(500).json({ message: "Error verifying payment: " + error.message });
     }
   });
 

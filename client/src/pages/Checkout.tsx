@@ -4,7 +4,6 @@ import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +20,14 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { getCart, calculateCartTotals, clearCart, CartItem } from "@/lib/cart";
+import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { Loader2 } from "lucide-react";
+
+if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
+  throw new Error('Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY');
+}
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
 const checkoutSchema = z.object({
   customerName: z.string().min(1, "Name is required"),
@@ -34,10 +41,124 @@ const checkoutSchema = z.object({
 
 type CheckoutForm = z.infer<typeof checkoutSchema>;
 
+function PaymentForm({ 
+  shippingInfo, 
+  cartItems,
+  subtotal,
+  tax,
+  total,
+  orderNumber
+}: { 
+  shippingInfo: CheckoutForm;
+  cartItems: CartItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  orderNumber: string;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const createOrderMutation = useMutation({
+    mutationFn: async (paymentIntentId: string) => {
+      const items = cartItems.map((item) => ({
+        productId: item.product.id,
+        name: item.product.name,
+        price: item.product.price,
+        size: item.size,
+        color: item.color,
+        quantity: item.quantity,
+      }));
+
+      return await apiRequest("POST", "/api/orders", {
+        orderNumber,
+        ...shippingInfo,
+        items,
+        subtotal: subtotal.toFixed(2),
+        tax: tax.toFixed(2),
+        total: total.toFixed(2),
+        stripePaymentIntentId: paymentIntentId,
+        status: "pending",
+        paymentStatus: "paid",
+      });
+    },
+    onSuccess: () => {
+      clearCart();
+      setLocation(`/confirmation/${orderNumber}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Order failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+    },
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!stripe || !elements) {
+      return;
+    }
+
+    setIsProcessing(true);
+
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/confirmation/${orderNumber}`,
+      },
+      redirect: "if_required",
+    });
+
+    if (error) {
+      toast({
+        title: "Payment Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+    } else if (paymentIntent && paymentIntent.status === "succeeded") {
+      createOrderMutation.mutate(paymentIntent.id);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <PaymentElement />
+      <Button
+        type="submit"
+        className="w-full uppercase tracking-wide"
+        disabled={!stripe || isProcessing || createOrderMutation.isPending}
+        data-testid="button-pay"
+      >
+        {isProcessing || createOrderMutation.isPending ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Processing...
+          </>
+        ) : (
+          `Pay $${total.toFixed(2)}`
+        )}
+      </Button>
+    </form>
+  );
+}
+
 export default function Checkout() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [step, setStep] = useState<"shipping" | "payment">("shipping");
+  const [shippingInfo, setShippingInfo] = useState<CheckoutForm | null>(null);
+  const [clientSecret, setClientSecret] = useState("");
+  const [generatedOrderNumber] = useState(`TS${Date.now()}`);
+  const [serverTotals, setServerTotals] = useState<{subtotal: number, tax: number, total: number} | null>(null);
 
   useEffect(() => {
     const items = getCart();
@@ -48,7 +169,7 @@ export default function Checkout() {
     }
   }, [setLocation]);
 
-  const { subtotal, tax, total } = calculateCartTotals(cartItems);
+  const { subtotal, tax, total } = serverTotals || calculateCartTotals(cartItems);
 
   const form = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
@@ -63,45 +184,133 @@ export default function Checkout() {
     },
   });
 
-  const [generatedOrderNumber] = useState(`TS${Date.now()}`);
-
-  const createOrderMutation = useMutation({
-    mutationFn: async (data: CheckoutForm) => {
+  const createPaymentIntentMutation = useMutation({
+    mutationFn: async () => {
       const items = cartItems.map((item) => ({
         productId: item.product.id,
-        name: item.product.name,
-        price: item.product.price,
+        quantity: item.quantity,
         size: item.size,
         color: item.color,
-        quantity: item.quantity,
       }));
-
-      return await apiRequest("POST", "/api/orders", {
-        orderNumber: generatedOrderNumber,
-        ...data,
+      
+      const response = await apiRequest("POST", "/api/create-payment-intent", {
         items,
-        subtotal: subtotal.toFixed(2),
-        tax: tax.toFixed(2),
-        total: total.toFixed(2),
       });
+      return response;
     },
     onSuccess: (data: any) => {
-      clearCart();
-      const orderNum = data?.orderNumber || generatedOrderNumber;
-      setLocation(`/confirmation/${orderNum}`);
+      setClientSecret(data.clientSecret);
+      setServerTotals({
+        subtotal: parseFloat(data.subtotal),
+        tax: parseFloat(data.tax),
+        total: parseFloat(data.total),
+      });
+      setStep("payment");
     },
     onError: (error: Error) => {
       toast({
-        title: "Order failed",
+        title: "Payment setup failed",
         description: error.message,
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: CheckoutForm) => {
-    createOrderMutation.mutate(data);
+  const onShippingSubmit = (data: CheckoutForm) => {
+    setShippingInfo(data);
+    createPaymentIntentMutation.mutate();
   };
+
+  if (step === "payment" && clientSecret && shippingInfo) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container px-4 py-12 md:px-6">
+          <div className="mx-auto max-w-4xl">
+            <h1
+              className="font-heading text-3xl font-bold tracking-tight sm:text-4xl"
+              data-testid="text-page-title"
+            >
+              Payment
+            </h1>
+
+            <div className="mt-8 grid gap-8 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Payment Information</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Elements stripe={stripePromise} options={{ clientSecret }}>
+                      <PaymentForm 
+                        shippingInfo={shippingInfo}
+                        cartItems={cartItems}
+                        subtotal={subtotal}
+                        tax={tax}
+                        total={total}
+                        orderNumber={generatedOrderNumber}
+                      />
+                    </Elements>
+                  </CardContent>
+                </Card>
+
+                <Button
+                  variant="ghost"
+                  onClick={() => setStep("shipping")}
+                  className="mt-4"
+                  data-testid="button-back"
+                >
+                  ← Back to Shipping
+                </Button>
+              </div>
+
+              <div className="lg:col-span-1">
+                <Card className="sticky top-24">
+                  <CardContent className="p-6 space-y-4">
+                    <h2 className="font-heading text-xl font-bold">Order Summary</h2>
+
+                    <div className="space-y-3">
+                      {cartItems.map((item) => (
+                        <div
+                          key={`${item.product.id}-${item.size}-${item.color}`}
+                          className="flex justify-between text-sm"
+                        >
+                          <span className="text-muted-foreground">
+                            {item.quantity}x {item.product.name}
+                          </span>
+                          <span>
+                            ${(parseFloat(item.product.price) * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span data-testid="text-subtotal">${subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Tax (8.5%)</span>
+                        <span data-testid="text-tax">${tax.toFixed(2)}</span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between text-base font-bold">
+                        <span>Total</span>
+                        <span data-testid="text-total">${total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,7 +332,7 @@ export default function Checkout() {
                 </CardHeader>
                 <CardContent>
                   <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <form onSubmit={form.handleSubmit(onShippingSubmit)} className="space-y-6">
                       <FormField
                         control={form.control}
                         name="customerName"
@@ -256,10 +465,17 @@ export default function Checkout() {
                       <Button
                         type="submit"
                         className="w-full uppercase tracking-wide"
-                        disabled={createOrderMutation.isPending}
-                        data-testid="button-place-order"
+                        disabled={createPaymentIntentMutation.isPending}
+                        data-testid="button-continue-payment"
                       >
-                        {createOrderMutation.isPending ? "Processing..." : "Place Order"}
+                        {createPaymentIntentMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          "Continue to Payment"
+                        )}
                       </Button>
                     </form>
                   </Form>

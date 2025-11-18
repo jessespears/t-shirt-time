@@ -1,26 +1,71 @@
-import { useQuery } from "@tanstack/react-query";
-import { useRoute, Link } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useRoute, Link, useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { Order } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useEffect, useState } from "react";
+import { clearCart } from "@/lib/cart";
 
 export default function Confirmation() {
   const [, params] = useRoute("/confirmation/:orderNumber");
+  const [location] = useLocation();
+  const { toast } = useToast();
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-  const { data: order, isLoading } = useQuery<Order>({
+  const urlParams = new URLSearchParams(window.location.search);
+  const paymentIntentParam = urlParams.get("payment_intent");
+  const paymentIntentClientSecret = urlParams.get("payment_intent_client_secret");
+
+  const { data: order, isLoading, refetch } = useQuery<Order>({
     queryKey: ["/api/orders", params?.orderNumber],
-    enabled: !!params?.orderNumber,
+    enabled: !!params?.orderNumber && !paymentIntentParam,
   });
 
-  if (isLoading) {
+  useEffect(() => {
+    if (paymentIntentParam && paymentIntentClientSecret && !isProcessingPayment) {
+      setIsProcessingPayment(true);
+      
+      apiRequest("GET", `/api/verify-payment/${paymentIntentParam}`)
+        .then((data: any) => {
+          if (data.status === "succeeded") {
+            clearCart();
+            window.history.replaceState({}, '', `/confirmation/${params?.orderNumber}`);
+            refetch();
+          } else {
+            toast({
+              title: "Payment processing",
+              description: `Payment status: ${data.status}. Please wait or contact support.`,
+              variant: "default",
+            });
+          }
+        })
+        .catch((error: Error) => {
+          toast({
+            title: "Payment verification failed",
+            description: error.message,
+            variant: "destructive",
+          });
+        })
+        .finally(() => {
+          setIsProcessingPayment(false);
+        });
+    }
+  }, [paymentIntentParam, paymentIntentClientSecret, params?.orderNumber, toast, refetch, isProcessingPayment]);
+
+  if (isLoading || isProcessingPayment) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container px-4 py-12 text-center">
-          <p>Loading order details...</p>
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-primary" />
+          <p className="mt-4">
+            {isProcessingPayment ? "Verifying payment..." : "Loading order details..."}
+          </p>
         </div>
       </div>
     );
@@ -32,6 +77,11 @@ export default function Confirmation() {
         <Header />
         <div className="container px-4 py-12 text-center">
           <h1 className="text-2xl font-bold">Order not found</h1>
+          <p className="mt-4 text-muted-foreground">
+            {paymentIntentParam 
+              ? "Your payment is being processed. Please check back shortly or contact support."
+              : "The order you're looking for doesn't exist."}
+          </p>
         </div>
       </div>
     );
