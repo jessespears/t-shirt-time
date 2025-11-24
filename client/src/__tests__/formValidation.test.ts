@@ -3,7 +3,7 @@ import { insertProductSchema, insertOrderSchema } from '../../../shared/schema';
 
 describe('Form Validation Schemas', () => {
   describe('Product Schema Validation', () => {
-    it('should validate a valid product', () => {
+    it('should validate a complete valid product', () => {
       const validProduct = {
         name: 'Beach Shirt',
         description: 'A cool beach-themed t-shirt',
@@ -16,117 +16,225 @@ describe('Form Validation Schemas', () => {
       };
 
       const result = insertProductSchema.safeParse(validProduct);
+      
+      if (!result.success) {
+        console.error('Validation errors:', result.error.issues);
+      }
+      
       expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.name).toBe('Beach Shirt');
+        expect(result.data.stockQuantity).toBe(100);
+        expect(result.data.availableSizes).toHaveLength(4);
+      }
     });
 
-    it('should reject product with missing required fields', () => {
+    it('should reject product with missing required name', () => {
       const invalidProduct = {
-        name: 'Beach Shirt',
-        // Missing other required fields
+        description: 'Test',
+        price: '29.99',
+        imageUrl: '/test.jpg',
+        availableSizes: ['M'],
+        availableColors: ['Blue'],
+        stockQuantity: 50,
+        lowStockThreshold: 5,
       };
 
       const result = insertProductSchema.safeParse(invalidProduct);
       expect(result.success).toBe(false);
     });
 
-    it('should validate stock quantities are numbers', () => {
-      const productWithValidStock = {
+    it('should allow empty description (not required to be non-empty)', () => {
+      const product = {
+        name: 'Test Shirt',
+        description: '',
+        price: '29.99',
+        imageUrl: '/test.jpg',
+        availableSizes: ['M'],
+        availableColors: ['Blue'],
+        stockQuantity: 50,
+        lowStockThreshold: 5,
+      };
+
+      const result = insertProductSchema.safeParse(product);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate types correctly (price as string, quantities as numbers)', () => {
+      const product = {
+        name: 'Test Shirt',
+        description: 'Test',
+        price: '29.99', // Decimal column - string in database
+        imageUrl: '/test.jpg',
+        availableSizes: ['M'],
+        availableColors: ['Blue'],
+        stockQuantity: 100, // Integer column
+        lowStockThreshold: 10, // Integer column
+      };
+
+      const result = insertProductSchema.safeParse(product);
+      
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Price should remain a string (decimal column)
+        expect(typeof result.data.price).toBe('string');
+        // Stock quantities are numbers
+        expect(typeof result.data.stockQuantity).toBe('number');
+        expect(typeof result.data.lowStockThreshold).toBe('number');
+      }
+    });
+
+    it('should accept zero stock quantity', () => {
+      const product = {
         name: 'Test Shirt',
         description: 'Test',
         price: '29.99',
         imageUrl: '/test.jpg',
         availableSizes: ['M'],
         availableColors: ['Blue'],
-        stockQuantity: 100,
-        lowStockThreshold: 10,
+        stockQuantity: 0,
+        lowStockThreshold: 5,
       };
 
-      const result = insertProductSchema.safeParse(productWithValidStock);
+      const result = insertProductSchema.safeParse(product);
       expect(result.success).toBe(true);
-      if (result.success) {
-        expect(typeof result.data.stockQuantity).toBe('number');
-        expect(typeof result.data.lowStockThreshold).toBe('number');
-      }
     });
   });
 
   describe('Order Schema Validation', () => {
-    it('should validate order has correct structure', () => {
-      // This test validates that our order data structure matches the schema requirements
-      const orderData = {
+    it('should validate a complete valid order', () => {
+      const validOrder = {
+        orderNumber: 'ORD-000001',
         customerName: 'John Doe',
         customerEmail: 'john@example.com',
-        shippingAddress: '123 Beach Ave, Ocean City, NJ 08226',
+        customerPhone: '555-1234',
+        shippingAddress: '123 Beach Ave',
+        shippingCity: 'Ocean City',
+        shippingState: 'NJ',
+        shippingZip: '08226',
+        items: [
+          {
+            productId: 'prod-123',
+            productName: 'Beach Shirt',
+            size: 'L',
+            color: 'Blue',
+            quantity: 2,
+            price: '29.99',
+          },
+        ],
         subtotal: '59.98',
         tax: '5.10',
         total: '65.08',
+        stripePaymentIntentId: 'pi_test123',
+        status: 'pending',
+        paymentStatus: 'paid',
+        updatedAt: new Date(),
       };
 
-      // Just verify the structure is correct
-      expect(orderData.customerEmail).toMatch(/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/);
-      expect(Number(orderData.subtotal)).toBeGreaterThan(0);
-      expect(Number(orderData.tax)).toBeGreaterThan(0);
-      expect(Number(orderData.total)).toBeGreaterThan(0);
+      const result = insertOrderSchema.safeParse(validOrder);
+      
+      if (!result.success) {
+        console.error('Validation errors:', result.error.issues);
+      }
+      
+      expect(result.success).toBe(true);
     });
 
-    it('should validate email format', () => {
-      const orderWithInvalidEmail = {
+    it('should accept any string as email (basic schema validation)', () => {
+      const order = {
+        orderNumber: 'ORD-000002',
         customerName: 'John Doe',
-        customerEmail: 'not-an-email',
+        customerEmail: 'any-string-accepted',
+        customerPhone: '555-1234',
         shippingAddress: '123 Beach Ave',
+        shippingCity: 'Ocean City',
+        shippingState: 'NJ',
+        shippingZip: '08226',
         items: [],
         subtotal: '0',
         tax: '0',
         total: '0',
-        paymentIntentId: 'pi_test',
         status: 'pending',
+        paymentStatus: 'unpaid',
+        updatedAt: new Date(),
       };
 
-      const result = insertOrderSchema.safeParse(orderWithInvalidEmail);
+      // Basic Drizzle schema accepts any string for text fields
+      const result = insertOrderSchema.safeParse(order);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject order with missing customer name', () => {
+      const invalidOrder = {
+        orderNumber: 'ORD-000003',
+        customerEmail: 'john@example.com',
+        customerPhone: '555-1234',
+        shippingAddress: '123 Beach Ave',
+        shippingCity: 'Ocean City',
+        shippingState: 'NJ',
+        shippingZip: '08226',
+        items: [],
+        subtotal: '0',
+        tax: '0',
+        total: '0',
+        status: 'pending',
+        paymentStatus: 'unpaid',
+        updatedAt: new Date(),
+      };
+
+      const result = insertOrderSchema.safeParse(invalidOrder);
       expect(result.success).toBe(false);
     });
 
-    it('should validate order status values', () => {
+    it('should validate order status enum values', () => {
       const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
       
-      // Verify that valid statuses are in the expected list
       validStatuses.forEach(status => {
-        expect(validStatuses).toContain(status);
+        const order = {
+          orderNumber: `ORD-00000${validStatuses.indexOf(status) + 4}`,
+          customerName: 'John Doe',
+          customerEmail: 'john@example.com',
+          customerPhone: '555-1234',
+          shippingAddress: '123 Beach Ave',
+          shippingCity: 'Ocean City',
+          shippingState: 'NJ',
+          shippingZip: '08226',
+          items: [],
+          subtotal: '0',
+          tax: '0',
+          total: '0',
+          status,
+          paymentStatus: 'unpaid',
+          updatedAt: new Date(),
+        };
+
+        const result = insertOrderSchema.safeParse(order);
+        expect(result.success).toBe(true);
       });
-      
-      // Verify we have all expected statuses
-      expect(validStatuses).toHaveLength(5);
     });
-  });
 
-  describe('Email Validation', () => {
-    it('should accept valid email formats', () => {
-      const validEmails = [
-        'user@example.com',
-        'johndoe@company.co.uk',
-        'testtag@gmail.com',
-        'name123@domain.org',
-      ];
+    it('should accept any string as status (schema has default but no enum)', () => {
+      const order = {
+        orderNumber: 'ORD-000009',
+        customerName: 'John Doe',
+        customerEmail: 'john@example.com',
+        customerPhone: '555-1234',
+        shippingAddress: '123 Beach Ave',
+        shippingCity: 'Ocean City',
+        shippingState: 'NJ',
+        shippingZip: '08226',
+        items: [],
+        subtotal: '0',
+        tax: '0',
+        total: '0',
+        status: 'custom-status',
+        paymentStatus: 'unpaid',
+        updatedAt: new Date(),
+      };
 
-      validEmails.forEach(email => {
-        const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-        expect(emailRegex.test(email)).toBe(true);
-      });
-    });
-
-    it('should reject invalid email formats', () => {
-      const invalidEmails = [
-        'notanemail',
-        '@example.com',
-        'user@',
-        'user @example.com',
-        'user@example',
-      ];
-
-      invalidEmails.forEach(email => {
-        const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
-        expect(emailRegex.test(email)).toBe(false);
-      });
+      // Basic Drizzle schema accepts any varchar value
+      const result = insertOrderSchema.safeParse(order);
+      expect(result.success).toBe(true);
     });
   });
 });

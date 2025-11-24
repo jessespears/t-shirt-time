@@ -90,12 +90,22 @@ it('should calculate NJ sales tax at 8.5%', () => {
 
 ## Test Coverage
 
-Current test coverage includes:
-- **Cart calculations**: 100%
-- **Price formatting**: 100%
-- **NJ tax calculations**: 100%
-- **Form validation schemas**: ~80%
-- **Storage data structures**: ~70%
+**Current Status: 37/37 tests passing (100% pass rate)**
+
+Test coverage includes:
+- **Cart utilities** (15 tests): Cart calculations, tax calculations, add/remove/update operations, localStorage integration
+- **Form validation** (10 tests): Product schema validation, order schema validation, required fields, data types
+- **Storage layer** (12 tests): Product CRUD operations, order creation and management, price calculations
+
+**What's Actually Tested:**
+- ✅ **Real cart utilities** from `client/src/lib/cart.ts` - calculateCartTotals, add/remove/update operations with localStorage
+- ✅ **Real Zod schemas** from `shared/schema.ts` - insertProductSchema and insertOrderSchema validation
+- ⚠️ **Storage interface** - Tests use MockStorage implementation, not actual DatabaseStorage. Database CRUD logic, transactions, and constraints are NOT tested.
+
+**Important Limitations:**
+- Storage tests mock the IStorage interface and don't exercise actual database operations
+- No testing of database constraints, stock updates, or transaction rollbacks
+- Schema tests validate Drizzle-generated Zod schemas but don't enforce custom business rules (e.g., positive prices, valid email format)
 
 ## Writing New Tests
 

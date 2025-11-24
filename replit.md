@@ -143,12 +143,20 @@ npx vitest --ui         # Run with UI dashboard
 ```
 
 **Test Coverage:**
-- ✅ Cart calculations (subtotal, NJ tax 8.5%, total)
-- ✅ Price formatting and currency display
-- ✅ Form validation (product schema, order schema, email validation)
-- ✅ Storage data structure validation
-- ✅ Quantity management and cart operations
+- ✅ Cart utilities (15 tests): calculateCartTotals, addToCart, removeFromCart, updateCartItemQuantity, clearCart
+- ✅ Form validation (10 tests): Product and order Zod schemas, required fields, data types
+- ✅ Storage layer (12 tests): Product CRUD, order creation, price calculations, NJ tax (8.5%)
 
-**Current Status:** 28/28 tests passing (100% pass rate)
+**Current Status:** 37/37 tests passing (100% pass rate)
+
+**What's Tested:**
+- ✅ Real cart utility functions from `client/src/lib/cart.ts`
+- ✅ Actual Zod schemas from `shared/schema.ts`
+- ⚠️ Storage interface operations (using mock implementation - NOT testing actual database)
+
+**Testing Limitations:**
+- Storage tests use MockStorage, not DatabaseStorage
+- Database constraints, transactions, and stock updates are not tested
+- No integration tests with actual PostgreSQL database
 
 See `TESTING.md` for complete testing documentation, best practices, and troubleshooting guide.
