@@ -66,6 +66,8 @@ Preferred communication style: Simple, everyday language.
   - `isAdmin` middleware protects admin-only routes (product management, order management)
   - New users default to non-admin (isAdmin = 0)
   - Admin status persists across logins
+  - Admins are automatically redirected to `/admin` after login
+  - Regular users are redirected to `/` (homepage) after login
 - Session TTL: 1 week with automatic refresh
 
 **Granting Admin Access:**

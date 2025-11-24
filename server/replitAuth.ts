@@ -110,9 +110,33 @@ export async function setupAuth(app: Express) {
 
   app.get("/api/callback", (req, res, next) => {
     ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    passport.authenticate(`replitauth:${req.hostname}`, async (err: any, user: any) => {
+      if (err) {
+        return next(err);
+      }
+      if (!user) {
+        return res.redirect("/api/login");
+      }
+      
+      req.logIn(user, async (loginErr) => {
+        if (loginErr) {
+          return next(loginErr);
+        }
+        
+        try {
+          const userId = user.claims?.sub;
+          if (userId) {
+            const dbUser = await storage.getUser(userId);
+            if (dbUser?.isAdmin) {
+              return res.redirect("/admin");
+            }
+          }
+          return res.redirect("/");
+        } catch (error) {
+          console.error("Error checking admin status:", error);
+          return res.redirect("/");
+        }
+      });
     })(req, res, next);
   });
 
