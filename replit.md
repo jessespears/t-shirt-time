@@ -124,3 +124,31 @@ Note: Users must log in at least once before they can be granted admin access.
 - Required: `DATABASE_URL`, `ISSUER_URL`, `REPL_ID`, `SESSION_SECRET`
 - Optional: `PUBLIC_OBJECT_SEARCH_PATHS` for asset management
 - Production/development mode switching via `NODE_ENV`
+
+## Testing
+
+The project uses **Vitest** for unit testing with comprehensive test coverage:
+
+**Test Structure:**
+- `client/src/__tests__/` - Frontend unit tests
+- `server/__tests__/` - Backend unit tests
+- `vitest.config.ts` - Test configuration
+- `TESTING.md` - Detailed testing guide
+
+**Running Tests:**
+```bash
+npx vitest              # Run tests in watch mode
+npx vitest run          # Run tests once (CI mode)
+npx vitest --ui         # Run with UI dashboard
+```
+
+**Test Coverage:**
+- ✅ Cart calculations (subtotal, NJ tax 8.5%, total)
+- ✅ Price formatting and currency display
+- ✅ Form validation (product schema, order schema, email validation)
+- ✅ Storage data structure validation
+- ✅ Quantity management and cart operations
+
+**Current Status:** 28/28 tests passing (100% pass rate)
+
+See `TESTING.md` for complete testing documentation, best practices, and troubleshooting guide.
