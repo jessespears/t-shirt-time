@@ -196,7 +196,7 @@ export default function Checkout() {
       const response = await apiRequest("POST", "/api/create-payment-intent", {
         items,
       });
-      return response;
+      return await response.json();
     },
     onSuccess: (data: any) => {
       if (!data.clientSecret || !data.subtotal || !data.tax || !data.total) {
