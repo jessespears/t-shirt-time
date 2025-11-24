@@ -266,9 +266,10 @@ export default function AdminDashboard() {
 
   const handleGetUploadParameters = async () => {
     const response = await apiRequest("POST", "/api/objects/upload", {});
+    const data = await response.json();
     return {
       method: "PUT" as const,
-      url: response.uploadURL,
+      url: data.uploadURL,
     };
   };
 
@@ -301,9 +302,10 @@ export default function AdminDashboard() {
           productImageURL: uploadURL,
         });
         
-        console.log("Response from /api/product-images:", response);
-        setUploadedImageUrl(response.objectPath);
-        form.setValue("imageUrl", response.objectPath);
+        const data = await response.json();
+        console.log("Response from /api/product-images:", data);
+        setUploadedImageUrl(data.objectPath);
+        form.setValue("imageUrl", data.objectPath);
         toast({
           title: "Image uploaded successfully",
         });
