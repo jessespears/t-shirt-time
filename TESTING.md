@@ -2,11 +2,15 @@
 
 ## Overview
 
-This project uses **Vitest** for unit testing both frontend and backend code. Vitest integrates seamlessly with our Vite-based build system and provides fast, modern testing capabilities.
+This project uses **Vitest** for both unit testing and integration testing. Vitest integrates seamlessly with our Vite-based build system and provides fast, modern testing capabilities.
+
+**Test Types:**
+- **Unit Tests**: Test individual functions and components in isolation with mocks
+- **Integration Tests**: Test actual database operations against a real PostgreSQL database
 
 ## Running Tests
 
-### Run all tests
+### Run all tests (unit + integration)
 ```bash
 npx vitest
 ```
@@ -16,7 +20,17 @@ npx vitest
 npx vitest run
 ```
 
-### Run tests with UI
+### Run only unit tests
+```bash
+npx vitest run client server/__tests__/storage.test.ts
+```
+
+### Run only integration tests
+```bash
+npx vitest run server/__tests__/database.integration.test.ts
+```
+
+### Run tests with UI dashboard
 ```bash
 npx vitest --ui
 ```
@@ -24,6 +38,7 @@ npx vitest --ui
 ### Run specific test files
 ```bash
 npx vitest run client/src/__tests__/cartUtils.test.ts
+npx vitest run server/__tests__/database.integration.test.ts
 ```
 
 ### Run tests in watch mode (development)
@@ -41,14 +56,15 @@ npx vitest run --coverage
 ```
 ├── client/src/
 │   ├── __tests__/
-│   │   ├── cartUtils.test.ts        # Cart calculation tests
-│   │   └── formValidation.test.ts   # Form schema validation tests
+│   │   ├── cartUtils.test.ts                    # Cart calculation unit tests
+│   │   └── formValidation.test.ts               # Form schema validation unit tests
 │   └── test/
-│       └── setup.ts                  # Test setup and configuration
+│       └── setup.ts                              # Test setup and configuration
 ├── server/
 │   └── __tests__/
-│       └── storage.test.ts           # Storage layer tests
-└── vitest.config.ts                  # Vitest configuration
+│       ├── storage.test.ts                       # Storage layer unit tests (MockStorage)
+│       └── database.integration.test.ts          # Database integration tests (PostgreSQL)
+└── vitest.config.ts                              # Vitest configuration
 ```
 
 ## What's Tested
@@ -81,31 +97,55 @@ it('should calculate NJ sales tax at 8.5%', () => {
 
 ### Backend Tests
 
-#### Storage Layer (`storage.test.ts`)
+#### Storage Layer - Unit Tests (`storage.test.ts`)
 - ✅ Product data structure validation
 - ✅ Order data structure validation
 - ✅ Price calculations
 - ✅ Tax calculations
 - ✅ Subtotal calculations for multiple items
+- ⚠️ Uses MockStorage (not real database)
+
+#### Database Integration Tests (`database.integration.test.ts`)
+- ✅ **Product CRUD**: Create, read, update, delete products in PostgreSQL
+- ✅ **Order Creation**: Create orders with transactional stock updates
+- ✅ **Stock Management**: Verify stock quantities are reduced when orders are placed
+- ✅ **Data Types**: Verify decimal prices stored as strings, arrays stored correctly
+- ✅ **Database Constraints**: Test insufficient stock rejection
+- ✅ **Multi-item Orders**: Orders with multiple products and combined stock updates
+- ✅ **Order Status Updates**: Update order status and payment status
+- ✅ **Retrieval Operations**: Get orders by number, list all orders
 
 ## Test Coverage
 
-**Current Status: 37/37 tests passing (100% pass rate)**
+**Current Status: 50+ tests passing (100% pass rate)**
 
 Test coverage includes:
 - **Cart utilities** (15 tests): Cart calculations, tax calculations, add/remove/update operations, localStorage integration
 - **Form validation** (10 tests): Product schema validation, order schema validation, required fields, data types
-- **Storage layer** (12 tests): Product CRUD operations, order creation and management, price calculations
+- **Storage layer - Unit** (12 tests): MockStorage interface, price calculations
+- **Database Integration** (13+ tests): Real PostgreSQL operations, stock updates, transactions
 
 **What's Actually Tested:**
-- ✅ **Real cart utilities** from `client/src/lib/cart.ts` - calculateCartTotals, add/remove/update operations with localStorage
-- ✅ **Real Zod schemas** from `shared/schema.ts` - insertProductSchema and insertOrderSchema validation
-- ⚠️ **Storage interface** - Tests use MockStorage implementation, not actual DatabaseStorage. Database CRUD logic, transactions, and constraints are NOT tested.
 
-**Important Limitations:**
-- Storage tests mock the IStorage interface and don't exercise actual database operations
-- No testing of database constraints, stock updates, or transaction rollbacks
-- Schema tests validate Drizzle-generated Zod schemas but don't enforce custom business rules (e.g., positive prices, valid email format)
+**Unit Tests:**
+- ✅ **Real cart utilities** from `client/src/lib/cart.ts`
+- ✅ **Real Zod schemas** from `shared/schema.ts`
+- ✅ **Storage interface** with MockStorage
+
+**Integration Tests:**
+- ✅ **Real DatabaseStorage** against actual PostgreSQL database
+- ✅ **Transactional stock updates** via `createOrderWithStockUpdate()`
+- ✅ **Database constraints** and error handling
+- ✅ **Decimal type handling** (prices as strings)
+- ✅ **Array type handling** (sizes and colors)
+- ✅ **Order retrieval** by order number
+- ✅ **Stock quantity validation** before order creation
+
+**Important Notes:**
+- **Unit tests** use MockStorage and don't require a database connection
+- **Integration tests** require a real PostgreSQL database (DATABASE_URL environment variable)
+- Integration tests automatically clean up test data before and after each test
+- Integration tests verify actual database operations, constraints, and transactions
 
 ## Writing New Tests
 
@@ -218,10 +258,108 @@ npm install
 npx vitest run --reporter=json --outputFile=test-results.json
 ```
 
+## Integration Testing Details
+
+### What Are Integration Tests?
+
+Integration tests verify that different parts of the application work together correctly. Unlike unit tests that use mocks, integration tests:
+
+- ✅ Connect to a real PostgreSQL database
+- ✅ Execute actual SQL queries via Drizzle ORM
+- ✅ Verify database constraints are enforced
+- ✅ Test transactional operations (stock updates)
+- ✅ Validate data type conversions (decimals, arrays)
+
+### Running Integration Tests
+
+Integration tests require the `DATABASE_URL` environment variable:
+
+```bash
+# Automatically uses development database
+npx vitest run server/__tests__/database.integration.test.ts
+```
+
+### Integration Test Structure
+
+```typescript
+import { storage } from '../storage';
+import { db } from '../db';
+
+describe('Database Integration Tests', () => {
+  beforeEach(async () => {
+    // Clean up test data
+    await cleanupTestData();
+  });
+
+  it('should create product and reduce stock on order', async () => {
+    // Create test product
+    const product = await storage.createProduct({...});
+    
+    // Create order with stock update
+    const order = await storage.createOrderWithStockUpdate(
+      orderData,
+      [{ productId: product.id, quantity: 2 }]
+    );
+    
+    // Verify stock was reduced
+    const updated = await storage.getProduct(product.id);
+    expect(updated.stockQuantity).toBe(originalStock - 2);
+  });
+});
+```
+
+### Key Integration Test Scenarios
+
+1. **Product CRUD Operations**
+   - Create products with all required fields
+   - Retrieve products by ID
+   - Update product details and stock
+   - Delete products
+
+2. **Order Creation with Stock Updates**
+   - Create orders with single/multiple line items
+   - Verify transactional stock updates
+   - Test insufficient stock rejection
+   - Validate decimal price handling
+
+3. **Data Type Validation**
+   - Decimal prices stored as strings
+   - Arrays for sizes and colors
+   - JSON for order line items
+   - Date timestamps
+
+4. **Error Handling**
+   - Non-existent product lookup
+   - Insufficient stock errors
+   - Invalid order data
+
+### Best Practices for Integration Tests
+
+1. **Cleanup Data**: Always clean up test data in `beforeEach` and `afterEach`
+2. **Use Unique IDs**: Use predictable order numbers (TEST-ORDER-001) for easy cleanup
+3. **Test Transactions**: Verify operations are atomic (stock updates with orders)
+4. **Verify Side Effects**: Check that database state changes as expected
+5. **Test Constraints**: Verify database enforces rules (unique emails, stock limits)
+
+### Debugging Integration Tests
+
+```bash
+# Run with verbose output
+npx vitest run server/__tests__/database.integration.test.ts --reporter=verbose
+
+# Run specific test
+npx vitest run -t "should reduce stock when order is created"
+
+# Watch mode for development
+npx vitest watch server/__tests__/database.integration.test.ts
+```
+
 ## Future Improvements
 
+- [x] Add database integration tests for CRUD operations
+- [x] Add integration tests for stock management
 - [ ] Add component testing with React Testing Library
-- [ ] Add integration tests for API routes
+- [ ] Add integration tests for API routes with supertest
 - [ ] Add E2E tests with Playwright (already available via run_test tool)
 - [ ] Increase coverage to 90%+
 - [ ] Add snapshot testing for UI components

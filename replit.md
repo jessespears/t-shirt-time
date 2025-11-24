@@ -127,36 +127,53 @@ Note: Users must log in at least once before they can be granted admin access.
 
 ## Testing
 
-The project uses **Vitest** for unit testing with comprehensive test coverage:
+The project uses **Vitest** for both unit testing and integration testing with comprehensive coverage:
 
 **Test Structure:**
 - `client/src/__tests__/` - Frontend unit tests
-- `server/__tests__/` - Backend unit tests
+- `server/__tests__/storage.test.ts` - Backend unit tests (MockStorage)
+- `server/__tests__/database.integration.test.ts` - Database integration tests (PostgreSQL)
 - `vitest.config.ts` - Test configuration
 - `TESTING.md` - Detailed testing guide
 
 **Running Tests:**
 ```bash
-npx vitest              # Run tests in watch mode
-npx vitest run          # Run tests once (CI mode)
-npx vitest --ui         # Run with UI dashboard
+npx vitest                                                        # Run all tests
+npx vitest run                                                    # Run once (CI mode)
+npx vitest run client server/__tests__/storage.test.ts          # Unit tests only
+npx vitest run server/__tests__/database.integration.test.ts    # Integration tests only
+npx vitest --ui                                                   # UI dashboard
 ```
 
 **Test Coverage:**
+
+**Unit Tests (37 tests):**
 - ✅ Cart utilities (15 tests): calculateCartTotals, addToCart, removeFromCart, updateCartItemQuantity, clearCart
 - ✅ Form validation (10 tests): Product and order Zod schemas, required fields, data types
-- ✅ Storage layer (12 tests): Product CRUD, order creation, price calculations, NJ tax (8.5%)
+- ✅ Storage layer (12 tests): MockStorage interface, price calculations, NJ tax (8.5%)
 
-**Current Status:** 37/37 tests passing (100% pass rate)
+**Integration Tests (15 tests):**
+- ✅ Product CRUD (8 tests): Create, read, update, delete products in PostgreSQL
+- ✅ Order operations (7 tests): Create orders with transactional stock updates, order retrieval, status updates
+- ✅ Stock management: Verify stock quantities are reduced when orders are placed
+- ✅ Data types: Decimal prices as strings, arrays for sizes/colors
+- ✅ Database constraints: Insufficient stock rejection, transaction rollback
+
+**Current Status:** 52/52 tests passing (100% pass rate)
 
 **What's Tested:**
+
+**Unit Tests:**
 - ✅ Real cart utility functions from `client/src/lib/cart.ts`
 - ✅ Actual Zod schemas from `shared/schema.ts`
-- ⚠️ Storage interface operations (using mock implementation - NOT testing actual database)
+- ✅ Storage interface operations with MockStorage
 
-**Testing Limitations:**
-- Storage tests use MockStorage, not DatabaseStorage
-- Database constraints, transactions, and stock updates are not tested
-- No integration tests with actual PostgreSQL database
+**Integration Tests:**
+- ✅ Real DatabaseStorage against actual PostgreSQL database
+- ✅ Transactional stock updates via `createOrderWithStockUpdate()`
+- ✅ Database constraints and error handling
+- ✅ Multi-item orders with combined stock updates
+- ✅ Order retrieval by order number
+- ✅ Order status and payment status updates
 
 See `TESTING.md` for complete testing documentation, best practices, and troubleshooting guide.
